@@ -147,10 +147,4 @@ MIT
 
 ---
 
-**Contact:**  
-- [your.email@example.com](mailto:your.email@example.com)  
-- [LinkedIn](https://linkedin.com/in/yourprofile)
-
----
-
 **ถ้า CTO/HR ต้องการดูโค้ดหรือรันจริง สามารถ clone และ setup ตามขั้นตอนด้านบนได้ทันที**

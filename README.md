@@ -40,11 +40,11 @@ Medlab ERP คือระบบบริหารคลังสินค้า
 
 ## UI Preview
 
-![Login Page](../PR/PR01.png)
-![Dashboard](../PR/PR02.png)
-![Product List](../PR/PR03.png)
-![Warehouse Management](../PR/PR04.png)
-![Transaction History](../PR/PR05.png)
+![Login Page](./PR/PR01.png)
+![Dashboard](./PR/PR02.png)
+![Product List](./PR/PR03.png)
+![Warehouse Management](./PR/PR04.png)
+![Transaction History](./PR/PR05.png)
 
 ---
 

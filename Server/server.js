@@ -10,7 +10,6 @@ const secret = "Medlab-V.2";
 const cookieParser = require("cookie-parser");
 const { exec } = require("child_process");
 const db = require('./src/db');
-const productController = require('./src/controllers/productController');
 
 app.use(
   cors({
@@ -247,24 +246,159 @@ app.post("/getUserDetail", jsonParser, async (req, res) => {
 
 // ----- Product -----
 
-app.get("/product", jsonParser, productController.getProducts);
-
-app.post("/getQuantity", jsonParser, productController.getQuantity);
-
-app.get("/inventorySummary", async (req, res) => {
-  // delegate to controller
-  return productController.inventorySummary(req, res);
+app.get("/product", jsonParser, async (req, res) => {
+  try {
+    const result = await db.query(
+      "SELECT * FROM product INNER JOIN unit ON product.unit = unit.unit_id INNER JOIN type ON product.type = type.type_id INNER JOIN category ON product.category = category.category_id ORDER BY id"
+    );
+    res.send(result.rows);
+  } catch (err) {
+    res.json({ status: "error", message: err.message });
+  }
 });
 
-app.post("/checkProductID", jsonParser, productController.checkProductID);
+app.post("/getQuantity", jsonParser, async (req, res) => {
+  const id = req.body.id;
+  try {
+    const result = await db.query(
+      "SELECT SUM(quantity) as p_quantity FROM lot WHERE p_id = $1 AND location_id IS NOT NULL",
+      [id]
+    );
+    res.send(result.rows);
+  } catch (err) {
+    res.json({ status: "error", message: err.message });
+  }
+});
 
-app.post("/addNewProduct", jsonParser, productController.addNewProduct);
+app.get("/inventorySummary", async (req, res) => {
+  try {
+    const countProductQuery = "SELECT COUNT(*)::int AS total_product FROM product";
+    const showLowStockQuery = `
+      SELECT 
+        p.id AS p_id,
+        p.name AS p_name,
+        u.unit_name AS unit,
+        p.low_stock,
+        COALESCE(SUM(l.quantity), 0)::int AS total_quantity,
+        CASE WHEN COALESCE(SUM(l.quantity), 0) <= p.low_stock THEN 'Low Stock' ELSE 'Sufficient Stock' END AS stock_status
+      FROM product p
+      LEFT JOIN lot l ON p.id = l.p_id
+      LEFT JOIN unit u ON p.unit = u.unit_id
+      GROUP BY p.id, p.name, u.unit_name, p.low_stock
+    `;
+    const showOutOfStockProductsQuery = `
+      SELECT 
+        p.id AS p_id,
+        p.name AS p_name,
+        p.low_stock,
+        COALESCE(SUM(l.quantity), 0)::int AS total_quantity,
+        CASE WHEN COALESCE(SUM(l.quantity), 0) <= 0 THEN 'Out of Stock' END AS stock_status
+      FROM product p
+      LEFT JOIN lot l ON p.id = l.p_id
+      GROUP BY p.id, p.name, p.low_stock
+      HAVING COALESCE(SUM(l.quantity), 0) <= 0
+    `;
+    const overdueLotsQuery = `
+      SELECT 
+        l.*, 
+        (l.exp_date - CURRENT_DATE) AS days_overdue,
+        p.name AS product_name,
+        loc.location_name,
+        w.warehouse_name
+      FROM lot l
+      LEFT JOIN product p ON l.p_id = p.id
+      LEFT JOIN location loc ON l.location_id = loc.location_id
+      LEFT JOIN warehouse w ON w.warehouse_id = loc.warehouse_id
+      WHERE l.location_id IS NOT NULL AND (l.exp_date - CURRENT_DATE) <= p.before_date
+    `;
 
-app.post("/getDetail", jsonParser, productController.getDetail);
+    const productResult = await db.query(countProductQuery);
+    const totalProductCount = productResult.rows[0].total_product;
+    const lowStockResult = await db.query(showLowStockQuery);
+    const lowStockProducts = lowStockResult.rows.filter((r) => r.stock_status === 'Low Stock');
+    const outOfStockProductsResult = await db.query(showOutOfStockProductsQuery);
+    const outOfStockProducts = outOfStockProductsResult.rows;
+    const overdueLotsResult = await db.query(overdueLotsQuery);
 
-app.put("/updateProduct", jsonParser, productController.updateProduct);
+    res.json({
+      status: "success",
+      total_product_count: totalProductCount,
+      low_stock_products: lowStockProducts,
+      out_of_stock_products: outOfStockProducts,
+      overdue_lots: overdueLotsResult.rows,
+    });
+  } catch (err) {
+    res.json({ status: "error", message: err.message });
+  }
+});
 
-app.delete("/removeProduct", jsonParser, productController.removeProduct);
+app.post("/checkProductID", jsonParser, async (req, res) => {
+  const id = req.body.id;
+  try {
+    const result = await db.query(
+      "SELECT COUNT(*) as countID FROM product WHERE id = $1",
+      [id]
+    );
+    res.send(result.rows);
+  } catch (err) {
+    res.json({ status: "error", message: err.message });
+  }
+});
+
+app.post("/addNewProduct", jsonParser, async (req, res) => {
+  const { id, name, low_stock, unit, type, category, detail, direction } = req.body;
+
+  try {
+    await db.query(
+      "INSERT INTO product (id, name, low_stock, unit, type, category, detail, direction) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+      [id, name, low_stock, unit, type, category, detail, direction]
+    );
+    res.json({ status: "success", message: "Insert Successfully" });
+  } catch (err) {
+    res.json({ status: "error", message: err.message });
+  }
+});
+
+// Get product detail for edit
+app.post("/getDetail", jsonParser, async (req, res) => {
+  const id = req.body.id;
+  const sql = `
+    SELECT * FROM product 
+    INNER JOIN unit ON product.unit = unit.unit_id 
+    INNER JOIN type ON product.type = type.type_id 
+    INNER JOIN category ON product.category = category.category_id
+    WHERE id = $1
+  `;
+  try {
+    const result = await db.query(sql, [id]);
+    res.send(result.rows);
+  } catch (err) {
+    res.json({ status: "error", message: err.message });
+  }
+});
+
+app.put("/updateProduct", jsonParser, async (req, res) => {
+  const { id, low_stock, name, unit, type, category, detail, direction } = req.body;
+  try {
+    await db.query(
+      "UPDATE product SET name = $1, low_stock = $2, unit = $3, type = $4, category = $5, detail = $6, direction = $7 WHERE id = $8",
+      [name, low_stock, unit, type, category, detail, direction, id]
+    );
+    res.json({ status: "success", message: "Update Successfully" });
+  } catch (err) {
+    res.json({ status: "error", message: err.message });
+  }
+});
+
+app.delete("/removeProduct", jsonParser, async (req, res) => {
+  const id = req.body.id;
+  try {
+    await db.query("DELETE FROM product WHERE id = $1", [id]);
+    res.json({ status: "success", message: "Delete Successfully" });
+  } catch (err) {
+    res.json({ status: "error", message: err.message });
+  }
+});
 
 // ----- Order -----
 app.post("/purchase", jsonParser, async (req, res) => {
@@ -324,15 +458,13 @@ app.post("/purchaseDetail", jsonParser, async (req, res) => {
 });
 
 // ----- Warehouse, Location -----
-app.get("/getWarehouse", jsonParser, (req, res) => {
-  db.query("SELECT * FROM warehouse", (err, result) => {
-    if (err) {
-      res.json({ status: "error", message: err });
-      return;
-    } else {
-      res.send(result.rows);
-    }
-  });
+app.get("/getWarehouse", jsonParser, async (req, res) => {
+  try {
+    const result = await db.query("SELECT * FROM warehouse ORDER BY warehouse_id");
+    res.send(result.rows);
+  } catch (err) {
+    res.json({ status: "error", message: err.message });
+  }
 });
 app.post("/createWarehouse", jsonParser, async (req, res) => {
   const name = req.body.name;
@@ -350,65 +482,49 @@ app.post("/createWarehouse", jsonParser, async (req, res) => {
     }
 
     // Insert
-    await db.query(
-      "INSERT INTO warehouse (warehouse_name) VALUES ($1)",
-      [name]
-    );
+    await db.query("INSERT INTO warehouse (warehouse_name) VALUES ($1)", [name]);
     return res.json({ status: "success", message: "Created" });
   } catch (err) {
     return res.json({ status: "error", message: err.message });
   }
 });
 
-app.post("/Warehouse", jsonParser, (req, res) => {
+app.post("/Warehouse", jsonParser, async (req, res) => {
   const warehouse_id = req.body.warehouse_id;
 
-  // get total locations in warehouse
-  const totalLocations = `
-      SELECT COUNT(*) AS total_locations
-      FROM location
-      WHERE warehouse_id = ?`;
+  try {
+    // get total locations in warehouse
+    const totalLocationsResult = await db.query(
+      `SELECT COUNT(*)::int AS total_locations FROM location WHERE warehouse_id = $1`,
+      [warehouse_id]
+    );
 
-  // get total lots in warehouse along with count where before_date >= DATEDIFF(exp_date, due_date)
-  const totalLots = `
-      SELECT
-        COUNT(lot.lot_id) AS total_lots,
-        SUM(CASE WHEN lot.before_date >= DATEDIFF(lot.exp_date, lot.due_date) THEN 1 ELSE 0 END) AS total_lots_before_date
-      FROM location l
-      LEFT JOIN lot ON l.location_id = lot.location_id
-      WHERE l.warehouse_id = ?
-      GROUP BY l.location_id`;
+    // get total lots in warehouse and lots matching before_date condition
+    const totalLotsResult = await db.query(
+      `SELECT
+         COUNT(l.lot_id)::int AS total_lots,
+         SUM(CASE WHEN l.before_date IS NOT NULL AND l.exp_date IS NOT NULL AND l.due_date IS NOT NULL
+                  AND l.before_date >= EXTRACT(DAY FROM (l.exp_date - l.due_date)) THEN 1 ELSE 0 END)::int AS total_lots_before_date
+       FROM location loc
+       LEFT JOIN lot l ON loc.location_id = l.location_id
+       WHERE loc.warehouse_id = $1`,
+      [warehouse_id]
+    );
 
-  // Execute total locations query
-  db.query(totalLocations, warehouse_id, (err, totalLocationsResult) => {
-    if (err) {
-      res.json({ status: "error", message: err });
-      return;
-    }
+    const total_locations = totalLocationsResult.rows[0]
+      ? totalLocationsResult.rows[0].total_locations
+      : 0;
+    const totalLotsRow = totalLotsResult.rows[0] || { total_lots: 0, total_lots_before_date: 0 };
 
-    db.query(totalLots, warehouse_id, (err, totalLotsResult) => {
-      if (err) {
-        res.json({ status: "error", message: err });
-        return;
-      }
-
-      const totalLotsCount = totalLotsResult.reduce(
-        (total, current) => total + current.total_lots,
-        0
-      );
-      const totalLotsBeforeDateCount = totalLotsResult.reduce(
-        (total, current) => total + current.total_lots_before_date,
-        0
-      );
-
-      res.json({
-        status: "success",
-        total_locations: totalLocationsResult[0].total_locations,
-        total_lots: totalLotsCount,
-        total_lots_before_date: totalLotsBeforeDateCount,
-      });
+    res.json({
+      status: "success",
+      total_locations: total_locations,
+      total_lots: Number(totalLotsRow.total_lots || 0),
+      total_lots_before_date: Number(totalLotsRow.total_lots_before_date || 0),
     });
-  });
+  } catch (err) {
+    res.json({ status: "error", message: err.message });
+  }
 });
 
 app.post("/WarehouseDetail", jsonParser, async (req, res) => {
@@ -434,34 +550,27 @@ app.post("/WarehouseDetail", jsonParser, async (req, res) => {
   }
 });
 
-app.delete("/deleteWarehouse", jsonParser, (req, res) => {
+app.delete("/deleteWarehouse", jsonParser, async (req, res) => {
   const warehouse_id = req.body.warehouse_id;
 
-  db.query(
-    "SELECT * FROM location WHERE warehouse_id = ?",
-    [warehouse_id],
-    (err, result) => {
-      if (!result.length) {
-        db.query(
-          "DELETE FROM warehouse WHERE warehouse_id = ?",
-          warehouse_id,
-          (err, result) => {
-            if (err) {
-              res.json({ status: "error", message: err });
-              return;
-            } else {
-              res.json({ status: "success", message: "Delete  Successfully" });
-            }
-          }
-        );
-      } else {
-        res.json({
-          status: "error",
-          message: "Cannot delete warehouse with existing location",
-        });
-      }
+  try {
+    const locCheck = await db.query(
+      "SELECT 1 FROM location WHERE warehouse_id = $1 LIMIT 1",
+      [warehouse_id]
+    );
+
+    if (locCheck.rows.length === 0) {
+      await db.query("DELETE FROM warehouse WHERE warehouse_id = $1", [warehouse_id]);
+      res.json({ status: "success", message: "Delete Successfully" });
+    } else {
+      res.json({
+        status: "error",
+        message: "Cannot delete warehouse with existing location",
+      });
     }
-  );
+  } catch (err) {
+    res.json({ status: "error", message: err.message });
+  }
 });
 
 app.post("/createLocation", jsonParser, async (req, res) => {
@@ -501,159 +610,101 @@ app.delete("/deleteLocation", jsonParser, async (req, res) => {
 });
 
 //get all and empty location
-app.get("/getAllLocation", jsonParser, (req, res) => {
-  const allLocation = `SELECT * FROM location`;
-  const emptyLocation = `
-    SELECT location.*
-    FROM location
-    LEFT JOIN lot ON location.location_id = lot.location_id
-    WHERE lot.location_id IS NULL`;
+app.get("/getAllLocation", jsonParser, async (req, res) => {
+  try {
+    const allLocationResult = await db.query(`SELECT * FROM location ORDER BY location_id`);
+    const emptyLocationResult = await db.query(
+      `SELECT location.*
+       FROM location
+       LEFT JOIN lot ON location.location_id = lot.location_id
+       WHERE lot.location_id IS NULL`);
 
-  db.query(allLocation, (err, allLocationResult) => {
-    if (err) {
-      res.json({ status: "error", message: err });
-      return;
-    } else {
-      const allLocations = allLocationResult.rows;
-
-      db.query(emptyLocation, (err, emptyLocationResult) => {
-        if (err) {
-          res.json({ status: "error", message: err });
-          return;
-        } else {
-          const emptyLocations = emptyLocationResult.rows;
-
-          res.json({
-            status: "success",
-            all_locations: allLocations,
-            empty_locations: emptyLocations,
-          });
-        }
-      });
-    }
-  });
+    res.json({
+      status: "success",
+      all_locations: allLocationResult.rows,
+      empty_locations: emptyLocationResult.rows,
+    });
+  } catch (err) {
+    res.json({ status: "error", message: err.message });
+  }
 });
 
 // ----- Import -----
 // Get Empty Location
 
-app.get("/getEmptyLocation", jsonParser, (req, res) => {
+app.get("/getEmptyLocation", jsonParser, async (req, res) => {
   const sql = `
   SELECT warehouse.warehouse_id, warehouse.warehouse_name,location.location_id, location.Location_name
   FROM location 
   LEFT JOIN warehouse ON location.warehouse_id = warehouse.warehouse_id
   LEFT JOIN lot ON location.location_id = lot.location_id 
   WHERE lot.location_id IS NULL`;
-  db.query(sql, (err, result) => {
-    if (err) {
-      res.json({ status: "error", message: err });
-      return;
-    } else {
-      res.send(result);
-    }
-  });
+  try {
+    const result = await db.query(sql);
+    res.send(result.rows);
+  } catch (err) {
+    res.json({ status: "error", message: err.message });
+  }
 });
 
-app.post("/getDetailForImport", jsonParser, (req, res) => {
+app.post("/getDetailForImport", jsonParser, async (req, res) => {
   const purchase_id = req.body.purchase_id;
 
-  // Query to check if there are any purchase records for the given purchase ID
-  let purchaseCheck = `
-    SELECT COUNT(*) AS purchaseCount
-    FROM purchase
-    WHERE purchase_id = ?`;
+  try {
+    // Check purchase existence
+    const purchaseCheck = await db.query(
+      `SELECT COUNT(*)::int AS purchasecount FROM purchase WHERE purchase_id = $1`,
+      [purchase_id]
+    );
 
-  db.query(purchaseCheck, purchase_id, (err, purchaseCheckResult) => {
-    if (err) {
-      res.json({ status: "error", message: err });
-      return;
+    if (purchaseCheck.rows[0].purchasecount === 0) {
+      return res.json({ status: "No purchase order", message: "No purchase order found for the given purchase ID" });
     }
 
-    const purchaseCount = purchaseCheckResult[0].purchaseCount;
+    // Count location_id not null in purchase_detail
+    const locationCountRes = await db.query(
+      `SELECT COUNT(*)::int AS locationcount FROM purchase_detail WHERE purchase_id = $1 AND location_id IS NOT NULL`,
+      [purchase_id]
+    );
 
-    if (purchaseCount === 0) {
-      res.json({
-        status: "No purchase order",
-        message: "No purchase order found for the given purchase ID",
-      });
-      return;
+    if (locationCountRes.rows[0].locationcount > 0) {
+      return res.json({ status: "Imported", message: "Locations are already imported" });
     }
 
-    // Query to count occurrences of lot.location_id that are not null
-    let LocationCount = `
-      SELECT COUNT(*) AS locationCount
+    // Count empty exp dates in lots for this purchase
+    const expDateCountRes = await db.query(
+      `SELECT COUNT(*)::int AS expdatecount
+       FROM lot
+       LEFT JOIN purchase_detail ON lot.lot_id = purchase_detail.lot_id
+       WHERE purchase_detail.purchase_id = $1 AND lot.exp_date IS NULL`,
+      [purchase_id]
+    );
+
+    if (expDateCountRes.rows[0].expdatecount > 0) {
+      return res.json({ status: "Waiting", message: "Waiting for vendor to provide expiration dates" });
+    }
+
+    // Retrieve purchase details
+    const sql = `
+      SELECT *
       FROM purchase_detail
-      WHERE purchase_id = ?  AND location_id IS NOT NULL`;
+      LEFT JOIN purchase ON purchase.purchase_id = purchase_detail.purchase_id
+      LEFT JOIN lot ON lot.lot_id = purchase_detail.lot_id
+      LEFT JOIN product ON product.id = lot.p_id
+      LEFT JOIN unit ON product.unit = unit.unit_id
+      LEFT JOIN location ON location.location_id = lot.location_id
+      WHERE purchase.purchase_id = $1`;
 
-    // Query to count occurrences of lot.exp_date that are empty
-    let ExpDateCount = `
-      SELECT COUNT(*) AS expDateCount
-      FROM lot
-      LEFT JOIN purchase_detail ON lot.lot_id = purchase_detail.lot_id
-      WHERE purchase_detail.purchase_id = ? AND lot.exp_date IS NULL`;
+    const result = await db.query(sql, [purchase_id]);
 
-    db.query(LocationCount, purchase_id, (err, locationResult) => {
-      if (err) {
-        res.json({ status: "error", message: err });
-        return;
-      }
+    if (!result.rows || result.rows.length === 0) {
+      return res.json({ status: "Not found", message: "No records found for the given purchase ID" });
+    }
 
-      const locationCount = locationResult[0].locationCount;
-
-      if (locationCount > 0) {
-        res.json({
-          status: "Imported",
-          message: "Locations are already imported",
-        });
-        return;
-      }
-
-      // Execute the query to count empty exp_dates
-      db.query(ExpDateCount, purchase_id, (err, expDateResult) => {
-        if (err) {
-          res.json({ status: "error", message: err });
-          return;
-        }
-        const expDateCount = expDateResult[0].expDateCount;
-        // If waiting for vendor, send response
-        if (expDateCount > 0) {
-          res.json({
-            status: "Waiting",
-            message: "Waiting for vendor to provide expiration dates",
-          });
-          return;
-        }
-
-        // Query to retrieve purchase details
-        let sql = `
-          SELECT *
-          FROM purchase_detail
-          LEFT JOIN purchase ON purchase.purchase_id = purchase_detail.purchase_id
-          LEFT JOIN lot ON lot.lot_id = purchase_detail.lot_id
-          LEFT JOIN product ON product.id = lot.p_id
-          LEFT JOIN unit ON product.unit = unit.unit_id
-          LEFT JOIN location ON location.location_id = lot.location_id
-          WHERE purchase.purchase_id = ?`;
-
-        // Execute the main query
-        db.query(sql, purchase_id, (err, result) => {
-          if (err) {
-            res.json({ status: "error", message: err });
-            return;
-          } else {
-            if (result.length === 0) {
-              res.json({
-                status: "Not found",
-                message: "No records found for the given purchase ID",
-              });
-            } else {
-              res.json({ status: "success", data: result });
-            }
-          }
-        });
-      });
-    });
-  });
+    return res.json({ status: "success", data: result.rows });
+  } catch (err) {
+    return res.json({ status: "error", message: err.message });
+  }
 });
 
 app.put("/import", jsonParser, (req, res) => {

@@ -1,0 +1,71 @@
+@import url("https://fonts.googleapis.com/css2?family=Kanit:wght@100;200;600&family=Prompt:wght@100;300;400;700&display=swap");
+
+:root {
+  font-family: "Prompt", Helvetica, Arial, sans-serif;
+  color-scheme: light dark;
+  background-color: var(--bg);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --dark-blue: #1c3e57;
+  --blue: #0057ff;
+  --light-blue: #01b3cc;
+  --green: #00ab1b;
+  --orange: #fc3c00;
+  --yellow: #fbb500;
+  --red: #ed0000;
+  --gray: #cecece;
+  --textBlack:#1f1f1f;
+  --textWhite:#ffff;
+  --bg: #ffffff;
+}
+
+*,
+body {
+  font-family: "Prompt";
+  box-sizing: border-box;
+  /* overflow: hidden; */
+  user-select: none;
+}
+body {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100dvw;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* @media (prefers-color-scheme: light) {
+  :root {
+    --dark-blue: #1c3e57;
+    --blue: #0057ff;
+    --light-blue: #01b3cc;
+    --green: #00ab1b;
+    --orange: #fc3c00;
+    --yellow: #fbb500;
+    --red: #ed0000;
+    --gray: #cecece;
+    --text:#1f1f1f;
+    --bg: #ffffff;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --dark-blue: #285c82;
+    --blue: #5d94ff;
+    --light-blue: #00c0da;
+    --green: #3cd253;
+    --orange: #ff693a;
+    --yellow: #ffd25e;
+    --red: #f84141;
+    --gray: #ededed;
+    --text:#ffff;
+    --bg: #1f1f1f;
+  }
+} */

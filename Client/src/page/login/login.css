@@ -1,0 +1,114 @@
+.help {
+  text-decoration: underline;
+  transition: all 0.3s ease;
+  opacity: 0.8;
+}
+
+.help:hover {
+  opacity: 1;
+  text-decoration-thickness: 2px;
+}
+
+.card {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border: none;
+  background: linear-gradient(145deg, #ffffff, #f8f9fa);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transition: left 0.6s;
+}
+
+.card:hover::before {
+  left: 100%;
+}
+
+.card:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  background: linear-gradient(145deg, #ffffff, #f0f2f5);
+}
+
+.card:active {
+  transform: translateY(-4px) scale(1.01);
+  transition: all 0.1s ease;
+}
+
+.card i {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+}
+
+.card:hover i {
+  transform: translateY(-5px) rotate(5deg);
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.2));
+}
+
+.userText, .adminText {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.card:hover .userText {
+  color: var(--blue);
+  text-shadow: 0 2px 4px rgba(0, 87, 255, 0.3);
+}
+
+.card:hover .adminText {
+  color: var(--green);
+  text-shadow: 0 2px 4px rgba(0, 171, 27, 0.3);
+}
+
+/* Title animations */
+.title-main {
+  background: linear-gradient(135deg, #ffffff, #e3f2fd);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  animation: titleGlow 3s ease-in-out infinite alternate;
+}
+
+.title-sub {
+  opacity: 0.9;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes titleGlow {
+  0% {
+    filter: brightness(1);
+  }
+  100% {
+    filter: brightness(1.1);
+  }
+}
+
+/* Background enhancements */
+.main-container {
+  background: linear-gradient(135deg, var(--dark-blue) 0%, #2c5f7a 50%, var(--dark-blue) 100%);
+  position: relative;
+}
+
+.main-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 20% 80%, rgba(0, 87, 255, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(0, 171, 27, 0.1) 0%, transparent 50%);
+  pointer-events: none;
+}

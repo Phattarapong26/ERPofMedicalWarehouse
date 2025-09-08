@@ -1,0 +1,17 @@
+{
+    "cSpell.words": [
+        "antd",
+        "fontawesome",
+        "ชนิด",
+        "มยาจากคำสั",
+        "รหัสผ่าน"
+    ],
+    "cSpell.customDictionaries": {
+        "custom-dictionary-workspace": {
+            "name": "custom-dictionary-workspace",
+            "path": "${workspaceFolder:Medlab-V.2}/.cspell/custom-dictionary-workspace.txt",
+            "addWords": true,
+            "scope": "workspace"
+        }
+    }
+}

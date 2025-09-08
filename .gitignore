@@ -1,0 +1,28 @@
+# Node
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Env
+.env
+
+# macOS
+.DS_Store
+
+# Logs
+logs
+*.log
+
+# VSCode
+.vscode/
+
+# Build
+dist/
+build/
+
+# Misc
+coverage/
+.idea/

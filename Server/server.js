@@ -1161,6 +1161,12 @@ app.get("/health", (req, res) => {
   });
 });
 
-app.listen("3000", () => {
-  console.log("Server is running on port 3000");
-});
+// Export app for testing and only start server when run directly
+if (require.main === module) {
+  const port = process.env.PORT || 3000;
+  app.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+  });
+}
+
+module.exports = app;
